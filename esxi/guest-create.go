@@ -55,7 +55,7 @@ func guestCREATE(c *Config, guest_name string, disk_store string,
 
 	if vmid != "" {
 		// We don't need to create the VM.   It already exists.
-		fmt.Printf("[guestCREATE] guest %s already exists vmid: \n", guest_name, stdout)
+		fmt.Printf("[guestCREATE] guest %s already exists vmid: %s\n", guest_name, stdout)
 
 		//
 		//   Power off guest if it's powered on.
@@ -198,12 +198,20 @@ func guestCREATE(c *Config, guest_name string, disk_store string,
 		if strings.HasPrefix(src_path, "http://") || strings.HasPrefix(src_path, "https://") {
 			log.Printf("[guestCREATE] Source is URL.\n")
 			resp, err := http.Get(src_path)
-			defer resp.Body.Close()
+			if resp != nil {
+				defer resp.Body.Close()
+			}
 			if (err != nil) || (resp.StatusCode != 200) {
 				log.Printf("[guestCREATE] URL not accessible: %s\n", src_path)
-				log.Printf("[guestCREATE] URL StatusCode: %s\n", resp.StatusCode)
-				log.Printf("[guestCREATE] URL Error: %s\n", err.Error())
-				return "", fmt.Errorf("URL not accessible: %s\n%s", src_path, err.Error())
+				if resp != nil {
+					log.Printf("[guestCREATE] URL StatusCode: %d\n", resp.StatusCode)
+				}
+				err_msg := ""
+				if err != nil {
+					err_msg = err.Error()
+					log.Printf("[guestCREATE] URL Error: %s\n", err_msg)
+				}
+				return "", fmt.Errorf("URL not accessible: %s\n%s", src_path, err_msg)
 			}
 		} else if strings.HasPrefix(src_path, "vi://") {
 			log.Printf("[guestCREATE] Source is Guest VM (vi).\n")
@@ -219,8 +227,10 @@ func guestCREATE(c *Config, guest_name string, disk_store string,
 		if boot_disk_type == "zeroedthick" {
 			boot_disk_type = "thick"
 		}
+
+		username := url.QueryEscape(c.esxiUserName)
 		password := url.QueryEscape(c.esxiPassword)
-		dst_path := fmt.Sprintf("vi://%s:%s@%s:%s/%s", c.esxiUserName, password, c.esxiHostName, c.esxiHostSSLport, resource_pool_name)
+		dst_path := fmt.Sprintf("vi://%s:%s@%s:%s/%s", username, password, c.esxiHostName, c.esxiHostSSLport, resource_pool_name)
 
 		net_param := ""
 		if (strings.HasSuffix(src_path, ".ova") || strings.HasSuffix(src_path, ".ovf")) && virtual_networks[0][0] != "" {
@@ -265,20 +275,20 @@ func guestCREATE(c *Config, guest_name string, disk_store string,
 			//  create new batch file
 			file, err := os.Create(ovf_bat.Name())
 			if err != nil {
-				return "", fmt.Errorf("Unable to create %s: %s\n", ovf_bat.Name(), err.Error())
 				defer file.Close()
+				return "", fmt.Errorf("Unable to create %s: %s\n", ovf_bat.Name(), err.Error())
 			}
 
 			_, err = file.WriteString(strings.Replace(ovf_cmd, "%", "%%", -1))
 			if err != nil {
-				return "", fmt.Errorf("Unable to write to %s: %s\n", ovf_bat.Name(), err.Error())
 				defer file.Close()
+				return "", fmt.Errorf("Unable to write to %s: %s\n", ovf_bat.Name(), err.Error())
 			}
 
 			err = file.Close()
 			if err != nil {
-				return "", fmt.Errorf("Unable to close %s: %s\n", ovf_bat.Name(), err.Error())
 				defer file.Close()
+				return "", fmt.Errorf("Unable to close %s: %s\n", ovf_bat.Name(), err.Error())
 			}
 			ovf_cmd = ovf_bat.Name()
 
