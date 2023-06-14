@@ -17,6 +17,8 @@ node('docker-slave') {
         sh """docker run -t --volumes-from $DOCKER_CONTAINER_ID -w ${env.WORKSPACE} $build_tools_image \
             /bin/sh -c '\
               mkdir build;\
+              export GOPROXY=http://nexus.${getDnsDomainName()}:8082/repository/golang-proxy;\
+              export GOSUMDB="sum.golang.org http://nexus.${getDnsDomainName()}:8082/repository/golang-sum-proxy";\
               go env;\
               CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags "-w -extldflags \"-static\"" -o build/terraform-provider-esxi'
         """
